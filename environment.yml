@@ -1,0 +1,21 @@
+name: rbo-stability
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+
+dependencies:
+  - python=3.11
+  - pip
+  - numpy=2.4.3
+  - scipy=1.17.1
+  - pip:
+      - torch==2.9.1+cu128
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      - transformers==5.8.0
+      - datasets==4.8.4
+      - huggingface_hub==1.7.2
+      - accelerate==1.13.0
+      - sentencepiece==0.2.1
+      - safetensors==0.7.0
+      - python-dotenv==1.2.2
