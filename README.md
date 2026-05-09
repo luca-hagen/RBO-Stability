@@ -1,33 +1,31 @@
 # Cyclic Rank Stability for Calibration-Free LLM Ensemble Aggregation
 
-This repository contains the anonymized experimental code for the paper:
+This repository contains anonymized code for reproducing the experiments from:
 
 **Cyclic Rank Stability for Calibration-Free LLM Ensemble Aggregation**
 
-The code reproduces the main computational pipeline for cyclic option scoring, RBO-based cyclic rank-stability weighting, ordinal ensemble aggregation, ensemble-size ablations, heterogeneity analyses, and entropy-weighted comparators.
-
-The repository is intended for anonymous review. It contains only code and setup files, not local caches, Hugging Face tokens, generated `.npz` files, or machine-specific paths.
+The code implements cyclic option scoring, RBO-based cyclic rank-stability weighting, ordinal ensemble aggregation, ensemble-size ablations, heterogeneity analyses, signal-validity checks, and entropy-weighted comparators for multiple-choice LLM benchmarks.
 
 ---
 
-## 1. Method overview
+## Overview
 
-The experiments evaluate heterogeneous ensembles of instruction-tuned LLMs on multiple-choice benchmarks.
+The method evaluates heterogeneous ensembles of instruction-tuned language models on multiple-choice benchmarks.
 
-For each question, model, and cyclic answer-option rotation, the scoring script computes teacher-forced next-token scores for all answer labels. The scores are then realigned to the original semantic answer options.
+For each question, model, and cyclic answer-option rotation, the scoring script computes teacher-forced next-token scores for the answer labels. The scores are realigned to the original semantic answer options. A model is treated as more reliable on a question if its ranking of semantic answer options remains stable across cyclic rotations.
 
-The core reliability signal is **cyclic rank stability**:
+Reliability is measured using Rank-Biased Overlap (RBO). The resulting per-question, per-model stability values are converted into softmax weights and used with ordinal aggregation rules such as hard majority, Borda, MRR, and IRV.
 
-- A model is considered more reliable on a question if its ranking of semantic answer options remains stable across cyclic answer-label rotations.
-- Rank stability is measured with Rank-Biased Overlap (RBO).
-- The fixed main-paper setting uses `p = 0.85` for RBO and softmax temperature `T = 1.0` for reliability weights.
-- The weighted aggregators are compared against matched cyclic-averaged unweighted baselines.
+The main comparison is between:
 
-The main point of the comparison is to isolate the effect of reliability weighting, not simply the effect of option-order debiasing. All ordinal baselines already use cyclic-mean scores.
+1. cyclic-averaged unweighted ordinal aggregation, and  
+2. cyclic-averaged ordinal aggregation with RBO-based rank-stability weighting.
+
+Thus, the experiments isolate the effect of reliability weighting beyond cyclic option-order averaging.
 
 ---
 
-## 2. Repository structure
+## Repository structure
 
 ```text
 .
@@ -41,21 +39,17 @@ The main point of the comparison is to isolate the effect of reliability weighti
     └── 03_entropy_vs_rbo.py
 ```
 
-### Files
-
-| File | Purpose |
+| File | Description |
 |---|---|
-| `README.md` | This documentation file. |
 | `environment.yml` | Conda environment specification. |
-| `.env.example` | Template for local environment variables such as Hugging Face token, cache path, and output path. |
-| `.gitignore` | Prevents committing secrets, local caches, generated outputs, and Python cache files. |
-| `scripts/01_score_cyclic_stability.py` | Main scoring and benchmark-level aggregation script. |
-| `scripts/02_ensemble_size_ablation.py` | Sub-ensemble, ensemble-size, heterogeneity, and signal-validity analysis. |
+| `.env.example` | Template for local environment variables. |
+| `scripts/01_score_cyclic_stability.py` | Main cyclic scoring and aggregation script. |
+| `scripts/02_ensemble_size_ablation.py` | Ensemble-size, heterogeneity, and signal-validity analyses. |
 | `scripts/03_entropy_vs_rbo.py` | Entropy-vs-RBO comparison and calibration stress test. |
 
 ---
 
-## 3. Environment setup
+## Installation
 
 Create the conda environment:
 
@@ -64,13 +58,12 @@ conda env create -f environment.yml
 conda activate rbo-stability
 ```
 
-The environment used for the reported code path was tested with:
+The tested environment used:
 
 ```text
 Python 3.11.15
 torch 2.9.1+cu128
 CUDA 12.8
-NVIDIA H100 80GB HBM3
 numpy 2.4.3
 scipy 1.17.1
 transformers 5.8.0
@@ -82,45 +75,19 @@ safetensors 0.7.0
 python-dotenv 1.2.2
 ```
 
-A matching `environment.yml` is:
-
-```yaml
-name: rbo-stability
-channels:
-  - pytorch
-  - nvidia
-  - conda-forge
-
-dependencies:
-  - python=3.11
-  - pip
-  - numpy=2.4.3
-  - scipy=1.17.1
-  - pip:
-      - --extra-index-url https://download.pytorch.org/whl/cu128
-      - torch==2.9.1+cu128
-      - transformers==5.8.0
-      - datasets==4.8.4
-      - huggingface_hub==1.7.2
-      - accelerate==1.13.0
-      - sentencepiece==0.2.1
-      - safetensors==0.7.0
-      - python-dotenv==1.2.2
-```
-
-If exact versions are unavailable on a different cluster, use the closest compatible versions and record the tested environment.
-
 ---
 
-## 4. Local `.env` configuration
+## Environment variables
 
-Copy the example file:
+The scripts read local configuration from a `.env` file.
+
+Create a local `.env` file from the provided template:
 
 ```bash
 cp .env.example .env
 ```
 
-Then edit `.env`:
+Example `.env` content:
 
 ```bash
 HF_TOKEN=hf_your_token_here
@@ -128,57 +95,19 @@ HF_CACHE_DIR=.cache/huggingface
 OUTPUT_DIR=majority_regime_analysis_results
 ```
 
-### Variables
+| Variable | Description |
+|---|---|
+| `HF_TOKEN` | Hugging Face token. Required only for gated models. |
+| `HF_CACHE_DIR` | Directory used for Hugging Face model and dataset caches. |
+| `OUTPUT_DIR` | Directory used for generated score caches, JSON files, and CSV files. |
 
-| Variable | Required? | Description |
-|---|---:|---|
-| `HF_TOKEN` | Optional, but required for gated models | Hugging Face access token. Needed for models such as Llama if access is gated. |
-| `HF_CACHE_DIR` | Optional | Local Hugging Face cache directory. Defaults to `.cache/huggingface`. |
-| `OUTPUT_DIR` | Optional | Directory where caches, JSON files, and CSV outputs are written. Defaults to `majority_regime_analysis_results`. |
-
-The `.env` file must not be committed.
-
-Only `.env.example` should be uploaded to GitHub.
+The `.env` file is intentionally excluded from version control.
 
 ---
 
-## 5. Anonymity and files not to commit
+## Benchmarks
 
-Do not commit:
-
-```text
-.env
-.cache/
-hf_cache/
-majority_regime_analysis_results/
-*.npz
-local cluster paths
-Hugging Face tokens
-user names
-institution names
-```
-
-Before uploading or committing, search the scripts for local identifiers:
-
-```bash
-grep -R "/vol/" .
-grep -R "HF_TOKEN=hf_" .
-grep -R "ak95ecuh" .
-```
-
-The code should contain only environment-variable based token handling, e.g.:
-
-```python
-HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
-```
-
----
-
-## 6. Data and models
-
-The scripts load benchmark datasets through Hugging Face `datasets`.
-
-Supported benchmark aliases in the scripts include:
+The scripts support multiple-choice benchmarks loaded through Hugging Face `datasets`, including:
 
 ```text
 mmlu
@@ -195,19 +124,21 @@ gpqa_experts
 medqa
 ```
 
-The model checkpoints are loaded from Hugging Face using `transformers`.
-
-Some checkpoints require:
-
-1. A Hugging Face account.
-2. Acceptance of the model terms on the model page.
-3. A valid `HF_TOKEN` in `.env`.
+The benchmark is selected by editing the `BENCHMARK` variable near the top of each script.
 
 ---
 
-## 7. Typical execution order
+## Models
 
-Run the scripts in this order:
+Models are configured through the `MODEL_NAMES` list near the top of each script.
+
+The reported experiments use Hugging Face model checkpoints. Some checkpoints may require gated access. For gated models, the user must have accepted the model terms on Hugging Face and must provide a valid `HF_TOKEN` in `.env`.
+
+---
+
+## Reproduction workflow
+
+The scripts should be run in this order:
 
 ```bash
 python scripts/01_score_cyclic_stability.py
@@ -215,13 +146,13 @@ python scripts/02_ensemble_size_ablation.py
 python scripts/03_entropy_vs_rbo.py
 ```
 
-Script 1 performs model inference and creates the cyclic score cache.
+`01_score_cyclic_stability.py` performs model inference and writes the cyclic score cache.
 
-Scripts 2 and 3 are downstream analyses. They expect the cyclic cache generated by Script 1 and do not rescore models.
+`02_ensemble_size_ablation.py` and `03_entropy_vs_rbo.py` reuse the cyclic score cache and do not rescore models.
 
 ---
 
-# 8. Script 1: Cyclic scoring and main aggregation analysis
+# Script 1: Cyclic scoring and main aggregation analysis
 
 ```bash
 python scripts/01_score_cyclic_stability.py
@@ -229,33 +160,28 @@ python scripts/01_score_cyclic_stability.py
 
 ## Purpose
 
-This is the main experimental script. It performs cyclic option scoring, computes cyclic rank-stability features, evaluates aggregation rules, and writes paper-facing result files.
+This script performs the main cyclic scoring and benchmark-level aggregation analysis.
 
-## What it does
+## Procedure
 
 The script:
 
-1. Loads the selected benchmark.
-2. Applies the configured answer-option count filter.
-3. Samples `N_SAMPLES` examples using `DATASET_SEED`.
-4. Loads each model listed in `MODEL_NAMES`.
-5. Scores each model on all cyclic answer-option rotations.
-6. Realigns shifted option scores back to original semantic option identities.
-7. Caches per-model cyclic scores.
-8. Builds the full cyclic score tensor.
-9. Computes cyclic-mean probabilities.
-10. Computes rank-stability features, including RBO-based stability.
-11. Evaluates single-model raw vs cyclic-mean accuracy.
-12. Evaluates unweighted aggregation baselines.
-13. Evaluates entropy-weighted baselines.
-14. Evaluates RBO/rank-stability-weighted variants.
-15. Computes paired tests, bootstrap intervals, and option-level AUROC.
-16. Saves JSON and CSV result files.
-17. Prints paper-facing summary tables.
+1. loads the selected benchmark,
+2. samples the configured number of examples using a fixed seed,
+3. loads each model in `MODEL_NAMES`,
+4. scores each model on all cyclic answer-option rotations,
+5. realigns cyclic scores to the original semantic answer options,
+6. caches per-model cyclic scores,
+7. builds the full cyclic score tensor,
+8. computes cyclic-mean option probabilities,
+9. computes cyclic rank-stability features,
+10. evaluates unweighted aggregation baselines,
+11. evaluates entropy-weighted baselines,
+12. evaluates RBO/rank-stability-weighted variants,
+13. computes paired statistics,
+14. saves JSON and CSV outputs.
 
-## Main configuration block
-
-At the top of the script, edit:
+## Main configuration variables
 
 ```python
 MODEL_NAMES = [...]
@@ -263,12 +189,13 @@ BENCHMARK = "mmlu"
 N_SAMPLES = 14042
 DATASET_SEED = 42
 DATASET_K_FILTER = "modal"
+
 USE_CACHE = True
 SCORE_BATCH = 64
 MAX_LENGTH = 2048
 ```
 
-Important method settings:
+Main method settings:
 
 ```python
 RUN_CYCLIC_SHIFT = True
@@ -281,9 +208,11 @@ PAPER_STABILITY_TEMPERATURE = 1.0
 ENTROPY_WEIGHT_TEMPERATURE = 1.0
 ```
 
-## Important outputs
+## Outputs
 
-Outputs are written to `OUTPUT_DIR`, for example:
+Outputs are written to `OUTPUT_DIR`.
+
+Typical outputs include:
 
 ```text
 majority_regime_analysis_results/
@@ -298,41 +227,7 @@ majority_regime_analysis_results/
 └── rbo_sensitivity_irv_*.csv
 ```
 
-## Cache behavior
-
-The script writes two cache types:
-
-### Per-model cache
-
-```text
-majority_regime_analysis_results/per_model_cache/
-```
-
-This stores cyclic scores per model and can be reused if a run is interrupted.
-
-### Full cyclic run cache
-
-```text
-cyclic_gen_scores_*.npz
-```
-
-This stores the full tensor of cyclic scores for all models.
-
-If `USE_CACHE = True`, existing compatible caches are reused.
-
-If model names, benchmark, sample size, option count, prompt template, or cyclic-shift settings differ, the script will create or require a different cache.
-
-## How to evaluate the results
-
-The main printed tables are:
-
-- `Single-model accuracy: raw vs cyclic_mean control`
-- `Oracle/reference accuracies`
-- `Unweighted baselines`
-- `Entropy-weighted baselines`
-- `Ours: softmax cyclic stability weighting`
-- `Compact paper table`
-- `RBO-p / temperature sensitivity summary`
+## Main result file
 
 The main JSON file is:
 
@@ -342,37 +237,38 @@ paper_facing_stability_eval_*.json
 
 It contains:
 
-```text
-config
-single_model_rows
-oracle_reference_rows
-paper_main_rows
-paper_method_meta
-sensitivity_rows
-sensitivity_csv_paths
-feature_summary_stats
-```
+| Key | Description |
+|---|---|
+| `config` | Benchmark, model, cache, and method configuration. |
+| `single_model_rows` | Raw and cyclic-mean single-model accuracies. |
+| `oracle_reference_rows` | Oracle and reference accuracies. |
+| `paper_main_rows` | Main aggregation results. |
+| `paper_method_meta` | Metadata for each aggregation method. |
+| `sensitivity_rows` | RBO persistence and temperature sensitivity results. |
+| `feature_summary_stats` | Summary statistics for stability features. |
 
-The most important table for benchmark-level comparison is `paper_main_rows`. Each row includes:
+The most important result table is `paper_main_rows`.
 
-| Field | Meaning |
+Important fields:
+
+| Field | Description |
 |---|---|
 | `method` | Aggregation method or weighted variant. |
-| `base_method` | Matched unweighted base rule. |
+| `base_method` | Matched unweighted baseline. |
 | `weighting` | `none`, `entropy_softmax`, or `stability_softmax`. |
 | `signal` | Reliability signal, e.g. `rbo_p85`. |
 | `acc` | Accuracy of the method. |
-| `matched_base_acc` | Accuracy of the matched unweighted baseline. |
-| `delta_vs_matched_base` | Matched improvement over the baseline. |
+| `matched_base_acc` | Accuracy of the matched baseline. |
+| `delta_vs_matched_base` | Matched accuracy gain. |
 | `wins` | Number of examples fixed by the weighted method. |
 | `losses` | Number of examples broken by the weighted method. |
 | `mcnemar_p` | Paired McNemar test p-value. |
-| `bootstrap_ci95_low` | Lower bootstrap CI for matched delta. |
-| `bootstrap_ci95_high` | Upper bootstrap CI for matched delta. |
+| `bootstrap_ci95_low` | Lower bootstrap confidence interval for the matched delta. |
+| `bootstrap_ci95_high` | Upper bootstrap confidence interval for the matched delta. |
 
 ---
 
-# 9. Script 2: Ensemble-size, heterogeneity, and signal-validity analysis
+# Script 2: Ensemble-size, heterogeneity, and signal-validity analysis
 
 ```bash
 python scripts/02_ensemble_size_ablation.py
@@ -380,19 +276,19 @@ python scripts/02_ensemble_size_ablation.py
 
 ## Purpose
 
-This script evaluates whether RBO-based rank-stability weighting works only for the full ensemble or also transfers to smaller sub-ensembles. It also analyzes whether gains are stronger for heterogeneous sub-ensembles and whether the stability signal tracks model-question correctness.
+This script analyzes whether RBO-based rank-stability weighting transfers across sub-ensembles and whether the gains are related to model heterogeneity.
 
-## Dependency on Script 1
+It also evaluates whether the RBO stability signal tracks model-question correctness.
 
-This script does not run model inference.
+## Dependency
 
-It requires the full cyclic cache produced by Script 1:
+This script requires the cyclic score cache produced by Script 1:
 
 ```text
 cyclic_gen_scores_*.npz
 ```
 
-The following settings must match the Script 1 run:
+The following settings must match the scoring run:
 
 ```python
 MODEL_NAMES
@@ -404,37 +300,26 @@ MAX_CYCLIC_SHIFTS
 CYCLIC_SHIFT_SEED
 ```
 
-If they do not match, the script raises a cache mismatch error.
+If these values do not match, the script raises a cache mismatch error.
 
-## What it does
+## Procedure
 
 The script:
 
-1. Loads the same benchmark selection.
-2. Loads the matching cyclic score cache.
-3. Computes cyclic-mean probabilities.
-4. Precomputes rankings and predictions.
-5. Computes RBO `p = 0.85` stability features.
-6. Computes signal-validity diagnostics.
-7. Enumerates all sub-ensembles of each ensemble size.
-8. Evaluates ordinal aggregation rules:
-   - hard majority
-   - Borda
-   - MRR
-   - IRV
-9. Compares RBO-weighted variants against matched unweighted baselines.
-10. Computes heterogeneity measures:
-   - single-model accuracy range
-   - single-model accuracy standard deviation
-   - mean RBO range
-   - mean RBO standard deviation
-11. Computes correlations between heterogeneity and gains.
-12. Bins sub-ensembles into low/medium/high heterogeneity groups.
-13. Saves row-level CSVs, summary CSVs, and JSON files.
+1. loads the same benchmark selection as Script 1,
+2. loads the matching cyclic score cache,
+3. computes cyclic-mean probabilities,
+4. precomputes rankings and predictions,
+5. computes RBO `p = 0.85` stability features,
+6. computes signal-validity statistics,
+7. enumerates sub-ensembles of each ensemble size,
+8. evaluates ordinal aggregation rules,
+9. compares RBO-weighted variants against matched unweighted baselines,
+10. computes heterogeneity metrics,
+11. computes correlations between heterogeneity and gains,
+12. writes row-level and summary result files.
 
-## Main configuration block
-
-Edit near the top:
+## Main configuration variables
 
 ```python
 MODEL_NAMES = [...]
@@ -442,24 +327,18 @@ BENCHMARK = "mmlu"
 N_SAMPLES = 14042
 DATASET_SEED = 42
 DATASET_K_FILTER = "modal"
-```
 
-Sub-ensemble settings:
-
-```python
 MAX_SUBENSEMBLES_PER_SIZE = None
 SUBENSEMBLE_SAMPLE_SEED = 12345
 COMPUTE_ROW_MCNEMAR = False
-```
 
-Heterogeneity settings:
-
-```python
 HETEROGENEITY_N_BINS = 3
 HETEROGENEITY_PRIMARY_METHOD = "mrr"
 ```
 
-## Important outputs
+## Outputs
+
+Typical outputs include:
 
 ```text
 majority_regime_analysis_results/
@@ -474,75 +353,71 @@ majority_regime_analysis_results/
 └── signal_validity_model_question_rows_*.csv
 ```
 
-## How to evaluate the results
+## Result files
 
 ### `ensemble_size_ablation_rows_*.csv`
 
-This is the row-level result file. Each row corresponds to:
+This file contains one row per:
 
 ```text
-one ensemble size
-one sub-ensemble
-one aggregation rule
+ensemble size × sub-ensemble × aggregation method
 ```
 
 Important columns:
 
-| Column | Meaning |
+| Column | Description |
 |---|---|
 | `ensemble_size` | Number of models in the sub-ensemble. |
-| `subset_indices` | Model indices used. |
-| `subset_models` | Model names used. |
-| `base_method` | Unweighted ordinal aggregator. |
+| `subset_indices` | Indices of models in the sub-ensemble. |
+| `subset_models` | Names of models in the sub-ensemble. |
+| `base_method` | Unweighted ordinal aggregation rule. |
 | `weighted_method` | RBO-weighted variant. |
-| `base_acc` | Accuracy of unweighted baseline. |
+| `base_acc` | Accuracy of the unweighted baseline. |
 | `weighted_acc` | Accuracy after RBO weighting. |
-| `delta` | Accuracy gain. |
+| `delta` | Matched accuracy gain. |
 | `wins` | Examples fixed by RBO weighting. |
 | `losses` | Examples broken by RBO weighting. |
-| `single_acc_range` | Difference between strongest and weakest model in the sub-ensemble. |
+| `single_acc_range` | Competence spread within the sub-ensemble. |
 | `single_acc_std` | Standard deviation of single-model accuracies. |
 
 ### `ensemble_size_ablation_summary_*.csv`
 
-This averages results over all sub-ensembles of the same size and aggregation method.
+This file aggregates row-level results by ensemble size and base method.
 
 Important columns:
 
-| Column | Meaning |
+| Column | Description |
 |---|---|
 | `ensemble_size` | Number of models. |
 | `base_method` | Aggregation rule. |
 | `n_subensembles` | Number of evaluated sub-ensembles. |
 | `base_acc_mean` | Mean unweighted accuracy. |
 | `weighted_acc_mean` | Mean RBO-weighted accuracy. |
-| `delta_mean` | Mean gain. |
+| `delta_mean` | Mean matched gain. |
 | `delta_q05`, `delta_q50`, `delta_q95` | Gain quantiles. |
-| `frac_delta_positive` | Fraction of sub-ensembles improved by RBO weighting. |
+| `frac_delta_positive` | Fraction of sub-ensembles improved by weighting. |
 | `corr_single_acc_range_delta` | Correlation between heterogeneity and gain. |
 
 ### `signal_validity_by_model_*.csv`
 
-This evaluates whether the RBO signal tracks correctness within each model.
+This file reports whether RBO stability tracks correctness within each model.
 
 Important columns:
 
-| Column | Meaning |
+| Column | Description |
 |---|---|
 | `model` | Model name. |
 | `accuracy` | Cyclic-mean single-model accuracy. |
 | `phi_mean` | Mean RBO stability. |
-| `phi_correct_mean` | Mean RBO stability on correct predictions. |
-| `phi_wrong_mean` | Mean RBO stability on wrong predictions. |
+| `phi_correct_mean` | Mean stability for correct predictions. |
+| `phi_wrong_mean` | Mean stability for wrong predictions. |
 | `phi_correct_minus_wrong` | Difference between correct and wrong cases. |
-| `within_model_r` | Point-biserial correlation between stability and correctness. |
+| `within_model_r` | Correlation between stability and correctness. |
 | `within_model_p` | p-value for the within-model correlation. |
-
-Use this script to reproduce the ensemble-size transfer analysis, heterogeneity-bin analysis, and signal-validity analysis.
 
 ---
 
-# 10. Script 3: Entropy vs RBO comparison and calibration stress test
+# Script 3: Entropy-vs-RBO comparison and calibration stress test
 
 ```bash
 python scripts/03_entropy_vs_rbo.py
@@ -550,13 +425,19 @@ python scripts/03_entropy_vs_rbo.py
 
 ## Purpose
 
-This script compares RBO-based rank-stability weighting against entropy-based confidence weighting. It also runs a controlled stress test in which the entropy signal of the weakest model is artificially sharpened while the actual aggregation probabilities are kept fixed.
+This script compares RBO-based rank-stability weighting against entropy-based confidence weighting.
 
-## Dependency on Script 1
+It also runs a controlled stress test where the entropy signal of the weakest model is artificially sharpened while the actual aggregation probabilities remain unchanged.
 
-This script also requires the cyclic score cache from Script 1.
+## Dependency
 
-The following settings must match:
+This script requires the cyclic score cache produced by Script 1:
+
+```text
+cyclic_gen_scores_*.npz
+```
+
+The following settings must match the scoring run:
 
 ```python
 MODEL_NAMES
@@ -568,31 +449,24 @@ MAX_CYCLIC_SHIFTS
 CYCLIC_SHIFT_SEED
 ```
 
-## What it does
+## Procedure
 
 The script:
 
-1. Loads the same benchmark selection.
-2. Loads the matching cyclic score cache.
-3. Computes cyclic-mean probabilities.
-4. Computes RBO stability features.
-5. Computes entropy-based weights.
-6. Computes RBO-based weights.
-7. Compares entropy weighting and RBO weighting for:
-   - hard majority
-   - Borda
-   - MRR
-   - IRV
-   - arithmetic mean
-   - geometric mean
-8. Identifies the weakest cyclic-mean model.
-9. Artificially sharpens only that model's entropy signal.
-10. Leaves the actual aggregation probabilities unchanged.
-11. Recomputes entropy weights under different sharpening temperatures.
-12. Shows how entropy weighting can degrade under spurious overconfidence.
-13. Shows that RBO weighting remains unchanged under this probability-scale perturbation.
+1. loads the same benchmark selection as Script 1,
+2. loads the matching cyclic score cache,
+3. computes cyclic-mean probabilities,
+4. computes RBO stability features,
+5. computes entropy-based confidence weights,
+6. computes RBO-based rank-stability weights,
+7. compares entropy and RBO weighting across aggregation rules,
+8. identifies the weakest cyclic-mean model,
+9. sharpens only that model's entropy signal,
+10. keeps the actual aggregation probabilities fixed,
+11. recomputes entropy weights under different sharpening temperatures,
+12. reports how entropy weighting changes under spurious overconfidence.
 
-## Main configuration block
+## Main configuration variables
 
 ```python
 RBO_P = 0.85
@@ -600,7 +474,7 @@ STABILITY_TEMPERATURE = 1.0
 ENTROPY_TEMPERATURE = 1.0
 ```
 
-Toy stress-test temperatures:
+Stress-test temperatures:
 
 ```python
 TOY_ENTROPY_SIGNAL_TAU_GRID = [
@@ -609,37 +483,39 @@ TOY_ENTROPY_SIGNAL_TAU_GRID = [
 ]
 ```
 
-## Output
+## Outputs
 
-This script primarily prints diagnostic tables to stdout:
+This script prints diagnostic tables to stdout:
 
-- `Direct paired comparison: entropy weighting vs RBO-rank weighting`
-- `Toy diagnostics: sanity checks for isolated perturbation`
-- `Toy overconfidence sweep: entropy vs RBO`
-- `Toy sweep compact summary across ordinal aggregators`
-
-The most important fields are:
-
-| Field | Meaning |
+| Table | Description |
 |---|---|
-| `base_acc` | Accuracy of unweighted cyclic-mean aggregator. |
+| `Direct paired comparison: entropy weighting vs RBO-rank weighting` | Direct matched comparison between entropy and RBO weighting. |
+| `Toy diagnostics: sanity checks for isolated perturbation` | Checks whether top-1 predictions and rankings changed under the entropy-signal perturbation. |
+| `Toy overconfidence sweep: entropy vs RBO` | Accuracy comparison across sharpening temperatures. |
+| `Toy sweep compact summary across ordinal aggregators` | Compact mean ordinal comparison across temperatures. |
+
+Important fields:
+
+| Field | Description |
+|---|---|
+| `base_acc` | Accuracy of the unweighted cyclic-mean aggregator. |
 | `entropy_acc` | Accuracy with entropy weighting. |
 | `rbo_acc` | Accuracy with RBO-rank weighting. |
 | `entropy_minus_rbo` | Difference between entropy and RBO weighting. |
-| `weak_model_entropy_weight` | Mean weight assigned to the weakest model by entropy weighting. |
-| `weak_model_rbo_weight` | Mean weight assigned to the weakest model by RBO weighting. |
-| `top1_changed_weak_model` | Sanity check that top-1 predictions remain unchanged. |
-| `full_ranking_changed_weak_model` | Sanity check for ranking changes. |
-
-The stress test is diagnostic. It is designed to isolate calibration sensitivity of entropy weighting rather than to create a new benchmark result.
+| `weak_model_entropy_weight` | Mean entropy weight assigned to the weakest model. |
+| `weak_model_rbo_weight` | Mean RBO weight assigned to the weakest model. |
+| `top1_changed_weak_model` | Fraction of changed top-1 predictions for the perturbed model. |
+| `full_ranking_changed_weak_model` | Fraction of changed full rankings for the perturbed model. |
 
 ---
 
-## 11. Reproducing a benchmark
+## Benchmark configurations
 
-To reproduce a benchmark, edit the configuration block at the top of each script.
+The benchmark configuration is controlled at the top of each script.
 
-Example for MMLU:
+Examples:
+
+### MMLU
 
 ```python
 BENCHMARK = "mmlu"
@@ -648,66 +524,64 @@ DATASET_SEED = 42
 DATASET_K_FILTER = "modal"
 ```
 
-Then run:
-
-```bash
-python scripts/01_score_cyclic_stability.py
-python scripts/02_ensemble_size_ablation.py
-python scripts/03_entropy_vs_rbo.py
-```
-
-For MMLU-Pro, use:
+### MMLU-Pro
 
 ```python
 BENCHMARK = "mmlu_pro"
 N_SAMPLES = 9981
+DATASET_SEED = 42
 DATASET_K_FILTER = "modal"
 ```
 
-For MedQA, use:
+### MedQA
 
 ```python
 BENCHMARK = "medqa"
 N_SAMPLES = 1274
+DATASET_SEED = 42
 DATASET_K_FILTER = "modal"
 ```
 
-For ARC-Challenge, use:
+### ARC-Challenge
 
 ```python
 BENCHMARK = "arc_challenge"
 N_SAMPLES = 1165
+DATASET_SEED = 42
 DATASET_K_FILTER = "modal"
 ```
 
-For GPQA-Extended, use:
+### GPQA-Extended
 
 ```python
 BENCHMARK = "gpqa_extended"
 N_SAMPLES = 546
+DATASET_SEED = 42
 DATASET_K_FILTER = "modal"
 ```
 
-Always run Script 1 first after changing the benchmark or model list.
+After changing the benchmark or model list, rerun Script 1 before running Scripts 2 or 3.
 
 ---
 
-## 12. Matching cache tags
+## Cache naming and matching
 
-Cache file names are derived from:
+Cache names are derived from:
 
 ```python
 CACHE_TAG = f"{BENCHMARK}_K{DATASET_K_FILTER}_N{N_SAMPLES}_seed{DATASET_SEED}_M{len(MODEL_NAMES)}"
 ```
 
-The cyclic cache additionally includes:
+The cyclic cache additionally depends on:
 
 ```python
 MAX_CYCLIC_SHIFTS
 CYCLIC_SHIFT_SEED
 ```
 
-If downstream scripts cannot find or load a cache, check that the following values match the scoring run:
+Downstream scripts require the cache to match the current configuration exactly.
+
+If a cache mismatch occurs, verify:
 
 ```python
 MODEL_NAMES
@@ -721,9 +595,9 @@ CYCLIC_SHIFT_SEED
 
 ---
 
-## 13. Compute notes
+## Compute requirements
 
-Cyclic scoring is the dominant cost.
+Cyclic scoring is the dominant computational cost.
 
 For:
 
@@ -733,7 +607,7 @@ M = number of models
 K = number of answer options
 ```
 
-the scoring cost scales approximately as:
+the approximate scoring cost is:
 
 ```text
 Q × M × K
@@ -741,18 +615,19 @@ Q × M × K
 
 teacher-forced forward passes.
 
-The scripts use caching so that expensive model scoring is performed once. Aggregation analyses, sensitivity checks, heterogeneity analyses, bootstrap intervals, and McNemar tests can then be recomputed from cached scores.
+The scripts cache intermediate cyclic scores so that aggregation analyses, sensitivity checks, heterogeneity analyses, bootstrap intervals, and statistical tests can be recomputed without rerunning model inference.
 
-Memory and runtime depend heavily on:
+Runtime and memory depend on:
 
 - model size,
-- GPU memory,
-- batch size,
-- maximum sequence length,
+- number of models,
 - benchmark size,
-- number of answer options.
+- number of answer options,
+- sequence length,
+- GPU memory,
+- scoring batch size.
 
-If you encounter GPU out-of-memory errors, reduce:
+If GPU memory is insufficient, reduce:
 
 ```python
 SCORE_BATCH = 64
@@ -768,54 +643,27 @@ MAX_LENGTH = 1536
 
 ---
 
-## 14. Troubleshooting
+## Troubleshooting
 
-### Hugging Face gated model error
+### Gated Hugging Face model
 
-If a gated model cannot be loaded:
+If a gated model cannot be loaded, verify that:
 
-1. Accept the model terms on Hugging Face.
-2. Add a valid token to `.env`:
+1. the model terms have been accepted on Hugging Face,
+2. a valid token is present in `.env`,
+3. the token has access to the requested model.
 
-```bash
-HF_TOKEN=hf_your_token_here
-```
+### CUDA out of memory
 
-3. Re-run the script.
-
-### CUDA out-of-memory
-
-Reduce:
-
-```python
-SCORE_BATCH
-MAX_LENGTH
-```
-
-or evaluate fewer/lower-memory models.
+Reduce `SCORE_BATCH` or `MAX_LENGTH`.
 
 ### Cache mismatch
 
-If Script 2 or Script 3 raises a cache mismatch, ensure that their configuration exactly matches the Script 1 run.
+Ensure that the downstream scripts use the same benchmark, model list, sample size, seed, and cyclic-shift settings as the scoring run.
 
-Most common causes:
+### Missing package
 
-- changed `MODEL_NAMES`,
-- changed benchmark,
-- changed `N_SAMPLES`,
-- changed `DATASET_K_FILTER`,
-- changed cyclic-shift settings,
-- deleted or moved output directory.
-
-### Missing Python package
-
-Activate the environment:
-
-```bash
-conda activate rbo-stability
-```
-
-Then check imports:
+Check the environment:
 
 ```bash
 python - <<'PY'
@@ -855,36 +703,46 @@ python -m py_compile scripts/03_entropy_vs_rbo.py
 
 ---
 
-## 15. Expected workflow for reviewers
+## Fast smoke test
 
-A typical reviewer workflow is:
-
-```bash
-conda env create -f environment.yml
-conda activate rbo-stability
-
-cp .env.example .env
-# edit .env if gated models are used
-
-python scripts/01_score_cyclic_stability.py
-python scripts/02_ensemble_size_ablation.py
-python scripts/03_entropy_vs_rbo.py
-```
-
-For faster smoke testing, reviewers can reduce:
+For a quick functionality check, reduce the configuration in Script 1:
 
 ```python
-N_SAMPLES
-MODEL_NAMES
-SCORE_BATCH
+N_SAMPLES = 10
+MODEL_NAMES = [
+    "google/gemma-3-270m-it",
+]
 ```
 
-However, changing these values changes the cache tag and will not reproduce the reported full-scale results.
+Then run:
+
+```bash
+python scripts/01_score_cyclic_stability.py
+```
+
+This does not reproduce the reported results, but it checks the environment, dataset loading, model loading, scoring, and output writing.
 
 ---
 
-## 16. License and citation
+## Reproducibility notes
 
-This repository is released for anonymous review.
+The scripts use fixed seeds for dataset sampling and cyclic-shift selection. Reproducibility depends on matching:
 
-Citation information and license details will be added after de-anonymization.
+- model checkpoints,
+- dataset versions,
+- Python package versions,
+- benchmark configuration,
+- model list,
+- sample size,
+- random seeds,
+- cache settings.
+
+The provided `environment.yml` records the tested software environment.
+
+---
+
+## License and citation
+
+This repository is provided as anonymized supplementary code for review.
+
+Citation and license information will be added after de-anonymization.
